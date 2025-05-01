@@ -4,33 +4,53 @@ from config import *
 from handle_tools import handle_tool
 from flask import Flask, request, jsonify
 import os
+import glob
 import json
 
+app = Flask(__name__)
 client = ollama.Client(host=HOST)
 CHAT_HISTORY = [
     {"role": "system", "content": "You are a helpful assistant. Use tools only when needed."},
     {"role": "user", "content": "My name is vishal kumar"},
     {"role": "assistant", "content": "Nice to meet you vishal"}
 ]
-app = Flask(__name__)
 
 # Save to JSON file
 def save_chat_history():
     with open("chat_history.json", "w") as f:
         json.dump(CHAT_HISTORY, f, indent=2)
 
+# Load chat_history plus training data from brain folder
 def load_chat_history():
     global CHAT_HISTORY
+
+    # Load main chat history
     if os.path.exists("chat_history.json") and os.stat("chat_history.json").st_size > 0:
         try:
             with open("chat_history.json", "r") as f:
-                temp = json.load(f)
-            if temp:
-                CHAT_HISTORY = temp
+                main_chat = json.load(f)
+            if isinstance(main_chat, list):
+                CHAT_HISTORY.extend(main_chat)
         except json.JSONDecodeError:
             print("Error: chat_history.json is not valid JSON. Starting with default history.")
     else:
-        print("No chat history file found or it's empty. Starting with default history.")
+        print("No chat_history.json file found or it's empty. Starting with default history.")
+
+    # Load additional training history from 'brain/' folder
+    brain_files = glob.glob("brain/*.json")
+
+    for file_path in brain_files:
+        try:
+            with open(file_path, "r") as f:
+                extra_chat = json.load(f)
+            if isinstance(extra_chat, list):
+                CHAT_HISTORY.extend(extra_chat)
+        except json.JSONDecodeError:
+            print(f"Error: {file_path} is not valid JSON. Skipping.")
+        except Exception as e:
+            print(f"Error reading {file_path}: {e}")
+
+    print(f"Loaded {len(CHAT_HISTORY)} total messages into memory.")
 
 def get_enabled_tools():
     tools = []
