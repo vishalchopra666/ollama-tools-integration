@@ -2,33 +2,50 @@ import ollama
 from tools.weather_tool import create_weather_tool
 from config import *
 from handle_tools import handle_tool
+from flask import Flask, request, jsonify
+
 
 client = ollama.Client(host=HOST)
+app = Flask(__name__)
+
+def get_enabled_tools():
+    tools = []
+    if not PLUGINS_ENABLED:
+        return tools
+
+    if ENABLED_TOOLS.get("weather"):
+        tools.append(create_weather_tool())
+    # Add more tools as you create them
+
+    return tools
 
 def chat_with_tools(user_input: str):
-    # Get tool definition
-    weather_tool = create_weather_tool()
 
-    # Send the user input and the weather tool to the model
+    tools = get_enabled_tools()
+
     response = client.chat(
         model=MODEL_NAME,
         messages=[{'role': 'user', 'content': user_input}],
-        tools=[weather_tool],
+        tools=tools
     )
 
-    # Get the model's response content and tool calls
     model_response = response['message']['content']
     tool_calls = response.get('message', {}).get('tool_calls', [])
 
     if tool_calls:
         for tool_call in tool_calls:
-            # Process each tool dynamically
             tool_result = handle_tool(tool_call)
             if tool_result:
                 return f"Tool response: {tool_result}"
 
-    # If no tool call is made, return the model's standard response
     return f"Assistant: {model_response}"
+
+
+@app.route("/chat", methods=["POST"])
+def chat_api():
+    user_input = request.json.get("input", "")
+    response = chat_with_tools(user_input)
+    return jsonify({"response": response})
 
 def start_chat():
     print("Start chatting with the bot (type 'exit' to end).")
@@ -42,4 +59,7 @@ def start_chat():
         print(response)
 
 if __name__ == "__main__":
-    start_chat()
+    if TERMINAL_MODE:
+        start_chat()
+    else:
+        app.run(debug=True)
