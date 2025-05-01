@@ -3,12 +3,37 @@ from tools.weather_tool import create_weather_tool
 from config import *
 from handle_tools import handle_tool
 from flask import Flask, request, jsonify
+import json
+import tempfile
 
 client = ollama.Client(host=HOST)
 CHAT_HISTORY = [
-    {"role": "system", "content": "You are a helpful assistant. Use tools only when needed."}
+    {"role": "system", "content": "You are a helpful assistant. Use tools only when needed."},
+    {"role": "user", "content": "My name is vishal kumar"},
+    {"role": "assistant", "content": "Nice to meet you vishal"}
 ]
 app = Flask(__name__)
+
+# Save to JSON file
+def save_chat_history():
+    with open("chat_history.json", "w") as f:
+        json.dump(CHAT_HISTORY, f, indent=2)
+
+import os
+import json
+
+def load_chat_history():
+    global CHAT_HISTORY
+    if os.path.exists("chat_history.json") and os.stat("chat_history.json").st_size > 0:
+        try:
+            with open("chat_history.json", "r") as f:
+                temp = json.load(f)
+            if temp:
+                CHAT_HISTORY = temp
+        except json.JSONDecodeError:
+            print("Error: chat_history.json is not valid JSON. Starting with default history.")
+    else:
+        print("No chat history file found or it's empty. Starting with default history.")
 
 def get_enabled_tools():
     tools = []
@@ -65,9 +90,11 @@ def chat_api():
 
 def start_chat():
     print("Start chatting with the bot (type 'exit' to end).")
+    load_chat_history()
     while True:
         user_input = input("You: ")
         if user_input.lower() == 'exit':
+            save_chat_history()
             break
         
         # Call the chat function with user input
