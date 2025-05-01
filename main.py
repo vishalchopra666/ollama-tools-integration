@@ -3,8 +3,8 @@ from tools.weather_tool import create_weather_tool
 from config import *
 from handle_tools import handle_tool
 from flask import Flask, request, jsonify
+import os
 import json
-import tempfile
 
 client = ollama.Client(host=HOST)
 CHAT_HISTORY = [
@@ -18,9 +18,6 @@ app = Flask(__name__)
 def save_chat_history():
     with open("chat_history.json", "w") as f:
         json.dump(CHAT_HISTORY, f, indent=2)
-
-import os
-import json
 
 def load_chat_history():
     global CHAT_HISTORY

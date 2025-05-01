@@ -1,5 +1,3 @@
-
-
 # Assuming each tool is defined with a function name and has its own handler
 def handle_tool(tool_call):
     tool_name = tool_call.function.name
