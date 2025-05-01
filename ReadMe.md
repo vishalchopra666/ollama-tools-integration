@@ -99,6 +99,5 @@ Add Tools definition
 
 You should update it with your ollama host, and model name.
 
-
 Note: Developed by @Vishalchopra666.
 Note: You might also like to explore my new web project here., [AI Bio Generator](https://quicksocialbio.com)
