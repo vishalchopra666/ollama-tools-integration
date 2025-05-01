@@ -9,4 +9,4 @@ ENABLED_TOOLS = {
 }
 
 # Mode toggle
-TERMINAL_MODE = True  # If False, use Flask API mode
+TERMINAL_MODE = False  # If False, use Flask API mode
