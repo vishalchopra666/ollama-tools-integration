@@ -9,22 +9,26 @@ import json
 
 app = Flask(__name__)
 client = ollama.Client(host=HOST)
-CHAT_HISTORY = [
+
+# Base system + intro chat history
+BASE_CONTEXT = [
     {"role": "system", "content": "You are a helpful assistant. Use tools only when needed."},
     {"role": "user", "content": "My name is vishal kumar"},
     {"role": "assistant", "content": "Nice to meet you vishal"}
 ]
 
-# Save to JSON file
+# This will store only current chat session (excluding training)
+CHAT_HISTORY = []
+
+# Save only the CHAT_HISTORY (not base or brain context)
 def save_chat_history():
     with open("chat_history.json", "w") as f:
         json.dump(CHAT_HISTORY, f, indent=2)
 
-# Load chat_history plus training data from brain folder
 def load_chat_history():
     global CHAT_HISTORY
+    CHAT_HISTORY = []
 
-    # Load main chat history
     if os.path.exists("chat_history.json") and os.stat("chat_history.json").st_size > 0:
         try:
             with open("chat_history.json", "r") as f:
@@ -32,25 +36,9 @@ def load_chat_history():
             if isinstance(main_chat, list):
                 CHAT_HISTORY.extend(main_chat)
         except json.JSONDecodeError:
-            print("Error: chat_history.json is not valid JSON. Starting with default history.")
+            print("Error: chat_history.json is not valid JSON. Starting fresh.")
     else:
-        print("No chat_history.json file found or it's empty. Starting with default history.")
-
-    # Load additional training history from 'brain/' folder
-    brain_files = glob.glob("brain/*.json")
-
-    for file_path in brain_files:
-        try:
-            with open(file_path, "r") as f:
-                extra_chat = json.load(f)
-            if isinstance(extra_chat, list):
-                CHAT_HISTORY.extend(extra_chat)
-        except json.JSONDecodeError:
-            print(f"Error: {file_path} is not valid JSON. Skipping.")
-        except Exception as e:
-            print(f"Error reading {file_path}: {e}")
-
-    print(f"Loaded {len(CHAT_HISTORY)} total messages into memory.")
+        print("No chat_history.json file found or it's empty. Starting fresh.")
 
 def get_enabled_tools():
     tools = []
@@ -59,50 +47,65 @@ def get_enabled_tools():
 
     if ENABLED_TOOLS.get("weather"):
         tools.append(create_weather_tool())
-    # Add more tools as you create them
+    # Add more tools as needed
 
     return tools
+
+def load_brain_context():
+    """Loads static brain training data but does not persist it."""
+    brain_context = []
+    brain_files = glob.glob("brain/*.json")
+
+    for file_path in brain_files:
+        try:
+            with open(file_path, "r") as f:
+                extra_chat = json.load(f)
+            if isinstance(extra_chat, list):
+                brain_context.extend(extra_chat)
+        except json.JSONDecodeError:
+            print(f"Error: {file_path} is not valid JSON. Skipping.")
+        except Exception as e:
+            print(f"Error reading {file_path}: {e}")
+
+    return brain_context
 
 def chat_with_tools(user_input: str):
     tools = get_enabled_tools()
 
-    # Add user input to chat history
-    CHAT_HISTORY.append({'role': 'user', 'content': user_input})
+    # Load temporary context for this chat (brain + current history)
+    full_context = BASE_CONTEXT + load_brain_context() + CHAT_HISTORY
+    full_context.append({'role': 'user', 'content': user_input})
 
-    # Send full history to the model
     response = client.chat(
         model=MODEL_NAME,
-        messages=CHAT_HISTORY,
+        messages=full_context,
         tools=tools
     )
 
     model_response = response['message']['content']
     tool_calls = response.get('message', {}).get('tool_calls', [])
 
+    # Save user message to CHAT_HISTORY
+    CHAT_HISTORY.append({'role': 'user', 'content': user_input})
+
     if tool_calls:
         for tool_call in tool_calls:
             tool_result = handle_tool(tool_call)
             if tool_result:
-                # Optionally store tool result as assistant message too
                 CHAT_HISTORY.append({'role': 'assistant', 'content': tool_result})
                 return f"Tool response: {tool_result}"
 
-    # Add model response to chat history
+    # Save assistant reply
     CHAT_HISTORY.append({'role': 'assistant', 'content': model_response})
     return f"Assistant: {model_response}"
 
 @app.route("/chat", methods=["POST"])
 def chat_api():
-    # Extract user input from the incoming JSON payload
     user_input = request.json.get("input", "")
-    
     if not user_input:
         return jsonify({"error": "No input provided"}), 400
-    
-    # Use the chat_with_tools function to get a response
+
     response = chat_with_tools(user_input)
-    
-    # Return the response as JSON
     return jsonify({"response": response})
 
 def start_chat():
@@ -113,8 +116,7 @@ def start_chat():
         if user_input.lower() == 'exit':
             save_chat_history()
             break
-        
-        # Call the chat function with user input
+
         response = chat_with_tools(user_input)
         print(response)
 
@@ -122,4 +124,5 @@ if __name__ == "__main__":
     if TERMINAL_MODE:
         start_chat()
     else:
+        load_chat_history()
         app.run(debug=True)
