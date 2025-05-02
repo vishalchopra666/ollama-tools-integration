@@ -124,4 +124,5 @@ if __name__ == "__main__":
         start_chat()
     else:
         load_chat_history()
+        load_brain_context_once()
         app.run(debug=True)
