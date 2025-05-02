@@ -20,9 +20,6 @@ BASE_CONTEXT = [
 # This will store only current chat session (excluding training)
 CHAT_HISTORY = []
 
-# Brain Context
-BRAIN_CONTEXT = []
-
 # Save only the CHAT_HISTORY (not base or brain context)
 def save_chat_history():
     with open("chat_history.json", "w") as f:
@@ -54,23 +51,29 @@ def get_enabled_tools():
 
     return tools
 
-def load_brain_context_once():
-    global BRAIN_CONTEXT
+def load_brain_context():
+    """Loads static brain training data but does not persist it."""
+    brain_context = []
     brain_files = glob.glob("brain/*.json")
+
     for file_path in brain_files:
         try:
             with open(file_path, "r") as f:
                 extra_chat = json.load(f)
             if isinstance(extra_chat, list):
-                BRAIN_CONTEXT.extend(extra_chat)
-        except:
-            pass
+                brain_context.extend(extra_chat)
+        except json.JSONDecodeError:
+            print(f"Error: {file_path} is not valid JSON. Skipping.")
+        except Exception as e:
+            print(f"Error reading {file_path}: {e}")
+
+    return brain_context
 
 def chat_with_tools(user_input: str):
     tools = get_enabled_tools()
 
     # Load temporary context for this chat (brain + current history)
-    full_context = BASE_CONTEXT + BRAIN_CONTEXT + CHAT_HISTORY
+    full_context = BASE_CONTEXT + load_brain_context() + CHAT_HISTORY
     full_context.append({'role': 'user', 'content': user_input})
 
     response = client.chat(
@@ -108,8 +111,6 @@ def chat_api():
 def start_chat():
     print("Start chatting with the bot (type 'exit' to end).")
     load_chat_history()
-    load_brain_context_once()
-
     while True:
         user_input = input("You: ")
         if user_input.lower() == 'exit':
@@ -124,5 +125,4 @@ if __name__ == "__main__":
         start_chat()
     else:
         load_chat_history()
-        load_brain_context_once()
         app.run(debug=True)
